@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Michelson Interferometer Lab Assistant</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: #e0e0e0;
+  }
+  .hero {
+    text-align: center;
+    padding: 40px 20px;
+    max-width: 600px;
+  }
+  .hero h1 {
+    font-size: 2rem;
+    margin-bottom: 16px;
+    background: linear-gradient(135deg, #a29bfe, #6c5ce7);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .hero p {
+    font-size: 1rem;
+    color: #999;
+    line-height: 1.6;
+  }
+  .widget-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 24px;
+    justify-content: center;
+    padding: 20px;
+  }
+  .demo-card {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 16px;
+    padding: 24px;
+    width: 320px;
+    backdrop-filter: blur(10px);
+  }
+  .demo-card h3 {
+    font-size: 1.1rem;
+    margin-bottom: 12px;
+    color: #a29bfe;
+  }
+  .demo-card p, .demo-card code {
+    font-size: 0.85rem;
+    color: #888;
+    line-height: 1.5;
+  }
+  .demo-card code {
+    display: block;
+    background: rgba(0,0,0,0.3);
+    padding: 10px;
+    border-radius: 8px;
+    margin-top: 8px;
+    font-family: 'Consolas', monospace;
+    font-size: 0.8rem;
+    word-break: break-all;
+  }
+  .footer {
+    margin-top: 40px;
+    padding: 20px;
+    text-align: center;
+    color: #555;
+    font-size: 0.8rem;
+  }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <h1>Michelson Interferometer</h1>
+  <p>AI-powered lab assistant — ask physics questions, analyze interference patterns, and count fringes in real time.</p>
+</div>
+
+<div class="widget-container">
+  <div class="demo-card">
+    <h3>Chat</h3>
+    <p>Ask about Michelson interferometer principles, formulas, alignment, and troubleshooting.</p>
+    <code>e.g. "条纹吞吐和镜子移动距离的关系公式？"</code>
+  </div>
+  <div class="demo-card">
+    <h3>Photo Analysis</h3>
+    <p>Upload a photo of your interference pattern and get diagnostic feedback and alignment suggestions.</p>
+    <code>Supports: JPG, PNG</code>
+  </div>
+  <div class="demo-card">
+    <h3>Fringe Counter</h3>
+    <p>Use your camera to count fringe swallowing/spitting in real time. Alerts every 50 fringes.</p>
+    <code>Requires: Camera access permission</code>
+  </div>
+</div>
+
+<div class="footer">
+  Click the floating button &rarr; bottom-right corner to open the assistant.
+</div>
+
+<!-- Embed the widget -->
+<script src="/widget.js"></script>
+<michelson-assistant api-base="http://localhost:8000"></michelson-assistant>
+
+</body>
+</html>
