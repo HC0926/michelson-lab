@@ -13,6 +13,7 @@ class MichelsonAssistant extends HTMLElement {
     this._open = false;
     this._tab = "chat";
     this._messages = [];
+    this._cameraReady = false;
     this._fringeRunning = false;
     this._fringeCount = 0;
     this._segmentCount = 0;
@@ -22,7 +23,6 @@ class MichelsonAssistant extends HTMLElement {
     this._lastState = null;
     this._halfCycle = false;
     this._animFrameId = null;
-    // Fringe detection params (optimized from real interferometer videos)
     this._noiseGate = 0.8;
     this._smoothWindow = 2;
     this._emaAlpha = 0.03;
@@ -77,16 +77,22 @@ class MichelsonAssistant extends HTMLElement {
       .fringe-view video { display: none; }
       .fringe-view canvas { width: 100%; height: 100%; object-fit: cover; }
       .fringe-count { position: absolute; top: 10px; left: 10px; color: #0f0; font-family: monospace; font-size: 16px; text-shadow: 0 0 6px rgba(0,255,0,0.5); background: rgba(0,0,0,0.6); padding: 6px 12px; border-radius: 6px; }
+      .fringe-pause-overlay { position: absolute; inset: 0; background: rgba(0,0,0,0.75); display: none; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: #fff; z-index: 10; }
+      .fringe-pause-overlay.show { display: flex; }
+      .fringe-pause-overlay .big-text { font-size: 20px; font-weight: 700; color: #f39c12; }
+      .fringe-pause-overlay .sub-text { font-size: 14px; color: #ccc; text-align: center; line-height: 1.5; }
+      .fringe-pause-overlay button { padding: 10px 24px; border: none; border-radius: 8px; cursor: pointer; font-size: 15px; font-weight: 600; background: #27ae60; color: #fff; -webkit-tap-highlight-color: transparent; }
       .fringe-controls { display: flex; gap: 8px; padding: 10px 0; flex-shrink: 0; }
       .fringe-controls button { flex: 1; padding: 12px 8px; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600; -webkit-tap-highlight-color: transparent; }
-      .btn-start { background: #27ae60; color: #fff; }
-      .btn-stop { background: var(--mc-danger); color: #fff; }
-      .btn-reset { background: #555; color: #fff; }
+      .fringe-controls button:disabled { opacity: 0.5; cursor: not-allowed; }
+      .btn-primary { background: #27ae60; color: #fff; }
+      .btn-danger { background: var(--mc-danger); color: #fff; }
+      .btn-secondary { background: #555; color: #fff; }
+      .fringe-tip { text-align: center; color: #f39c12; font-size: 13px; padding: 8px 0; flex-shrink: 0; }
       .loading { text-align: center; padding: 20px; color: #888; }
       .loading::after { content: "..."; animation: dots 1.4s infinite; }
       @keyframes dots { 0%,20% { content: "."; } 40% { content: ".."; } 60%,100% { content: "..."; } }
       .empty-state { text-align: center; color: #666; padding: 30px 20px; font-size: 14px; }
-      /* Mobile: full-screen panel + larger touch targets */
       @media (max-width: 480px) {
         .bubble { bottom: 16px; right: 16px; width: 52px; height: 52px; font-size: 22px; }
         .panel { top: 0; left: 0; bottom: 0; right: 0; width: 100%; height: 100%; max-height: 100vh; max-width: 100vw; border-radius: 0; border: none; }
@@ -102,7 +108,6 @@ class MichelsonAssistant extends HTMLElement {
         .fringe-count { font-size: 14px; top: 6px; left: 6px; padding: 4px 10px; }
         .fringe-controls button { padding: 14px 8px; font-size: 14px; }
       }
-      /* Tablet: mid-size panel */
       @media (min-width: 481px) and (max-width: 768px) {
         .panel { bottom: 16px; right: 16px; left: 16px; top: auto; width: auto; height: 65vh; border-radius: 16px 16px 0 0; }
       }
@@ -135,12 +140,17 @@ class MichelsonAssistant extends HTMLElement {
             <video id="fringe-video" autoplay playsinline></video>
             <canvas id="fringe-canvas"></canvas>
             <div class="fringe-count" id="fringe-count">计数: 0 | 分段: 0/50</div>
+            <div class="fringe-pause-overlay" id="fringe-pause">
+              <div class="big-text">&#128203; 已完成 50 条条纹计数！</div>
+              <div class="sub-text">请记录当前数据（计数器显示的总数和仪器读数），<br>然后点击"继续"开始下一段计数。</div>
+              <button id="btn-fringe-resume">继续计数</button>
+            </div>
           </div>
-          <div style="text-align:center;color:#f39c12;font-size:13px;padding:8px 0;flex-shrink:0;">&#9888; 请保持仪器平稳！</div>
+          <div class="fringe-tip">&#9888; 请保持仪器平稳！</div>
           <div class="fringe-controls">
-            <button class="btn-start" id="btn-fringe-start">打开摄像头</button>
-            <button class="btn-stop" id="btn-fringe-stop" disabled>停止</button>
-            <button class="btn-reset" id="btn-fringe-reset">重置计数</button>
+            <button class="btn-primary" id="btn-fringe-action">打开摄像头</button>
+            <button class="btn-danger" id="btn-fringe-stop" disabled>停止</button>
+            <button class="btn-secondary" id="btn-fringe-reset">重置计数</button>
           </div>
         </div>
       </div>`;
@@ -161,9 +171,10 @@ class MichelsonAssistant extends HTMLElement {
     s.getElementById("photo-drop").addEventListener("dragleave", e => { e.currentTarget.style.borderColor = "var(--mc-border)"; });
     s.getElementById("photo-drop").addEventListener("drop", e => { e.preventDefault(); e.currentTarget.style.borderColor = "var(--mc-border)"; const f = e.dataTransfer.files[0]; if (f) this._previewPhoto(f); });
     s.getElementById("btn-analyze").addEventListener("click", () => this._analyzePhoto());
-    s.getElementById("btn-fringe-start").addEventListener("click", () => this._startFringe());
-    s.getElementById("btn-fringe-stop").addEventListener("click", () => this._stopFringe());
+    s.getElementById("btn-fringe-action").addEventListener("click", () => this._handleActionBtn());
+    s.getElementById("btn-fringe-stop").addEventListener("click", () => this._stopCamera());
     s.getElementById("btn-fringe-reset").addEventListener("click", () => { this._fringeCount = 0; this._segmentCount = 0; this._updateFringeDisplay(); });
+    s.getElementById("btn-fringe-resume").addEventListener("click", () => this._startCounting());
   }
 
   // ── Panel ───────────────────────────────────────────────────
@@ -303,9 +314,18 @@ class MichelsonAssistant extends HTMLElement {
     }
   }
 
-  async _startFringe() {
+  _handleActionBtn() {
+    if (!this._cameraReady) {
+      this._openCamera();
+    } else if (!this._fringeRunning) {
+      this._startCounting();
+    } else {
+      this._pauseCounting();
+    }
+  }
+
+  async _openCamera() {
     const video = this.shadow.getElementById("fringe-video");
-    this._stopFringe();
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: "environment", width: { ideal: 640 }, height: { ideal: 480 } },
@@ -314,56 +334,106 @@ class MichelsonAssistant extends HTMLElement {
       video.srcObject = stream;
       await video.play();
 
-      this._fringeRunning = true;
+      this._cameraReady = true;
+      this._fringeRunning = false;
       this._baseline = null;
       this._lastState = null;
       this._halfCycle = false;
       this._intensityHistory = [];
 
-      this.shadow.getElementById("btn-fringe-start").disabled = true;
-      this.shadow.getElementById("btn-fringe-stop").disabled = false;
+      // Show live preview (no counting yet)
       this._processFringeFrame();
+
+      // Update button states
+      this.shadow.getElementById("btn-fringe-action").textContent = "开始计数";
+      this.shadow.getElementById("btn-fringe-action").className = "btn-primary";
+      this.shadow.getElementById("btn-fringe-stop").disabled = false;
     } catch (e) {
       alert("摄像头访问被拒绝: " + e.message);
     }
   }
 
-  _stopFringe() {
+  _startCounting() {
+    this._fringeRunning = true;
+    this._baseline = null;
+    this._lastState = null;
+    this._halfCycle = false;
+    this._intensityHistory = [];
+    this._segmentCount = 0;
+
+    this.shadow.getElementById("btn-fringe-action").textContent = "暂停";
+    this.shadow.getElementById("btn-fringe-action").className = "btn-secondary";
+    this.shadow.getElementById("fringe-pause").classList.remove("show");
+  }
+
+  _pauseCounting() {
     this._fringeRunning = false;
+    this.shadow.getElementById("btn-fringe-action").textContent = "继续";
+    this.shadow.getElementById("btn-fringe-action").className = "btn-primary";
+  }
+
+
+  _stopCamera() {
+    this._fringeRunning = false;
+    this._cameraReady = false;
     if (this._animFrameId) cancelAnimationFrame(this._animFrameId);
     const video = this.shadow.getElementById("fringe-video");
     if (video.srcObject) {
       video.srcObject.getTracks().forEach(t => t.stop());
       video.srcObject = null;
     }
-    this.shadow.getElementById("btn-fringe-start").disabled = false;
+    // Clear canvas
+    const canvas = this.shadow.getElementById("fringe-canvas");
+    const ctx = canvas.getContext("2d");
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    this.shadow.getElementById("btn-fringe-action").textContent = "打开摄像头";
+    this.shadow.getElementById("btn-fringe-action").className = "btn-primary";
     this.shadow.getElementById("btn-fringe-stop").disabled = true;
+    this.shadow.getElementById("fringe-pause").classList.remove("show");
   }
 
   _processFringeFrame() {
-    if (!this._fringeRunning) return;
+    if (!this._cameraReady) return;
 
     const video = this.shadow.getElementById("fringe-video");
     const canvas = this.shadow.getElementById("fringe-canvas");
     const ctx = canvas.getContext("2d");
 
-    // Match canvas to video
     if (canvas.width !== video.videoWidth && video.videoWidth > 0) {
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
     }
 
-    // Draw video frame to canvas
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-    // Extract central ROI
+    // Only run detection if actively counting
+    if (this._fringeRunning) {
+      this._detectFrame(ctx, canvas);
+    } else {
+      // Just draw crosshair in preview mode
+      const cx = Math.floor(canvas.width / 2);
+      const cy = Math.floor(canvas.height / 2);
+      ctx.strokeStyle = "rgba(255,255,255,0.3)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(cx - 15, cy);
+      ctx.lineTo(cx + 15, cy);
+      ctx.moveTo(cx, cy - 15);
+      ctx.lineTo(cx, cy + 15);
+      ctx.stroke();
+    }
+
+    this._animFrameId = requestAnimationFrame(() => this._processFringeFrame());
+  }
+
+  _detectFrame(ctx, canvas) {
     const roiSize = 100;
     const cx = Math.floor(canvas.width / 2);
     const cy = Math.floor(canvas.height / 2);
     const half = Math.floor(roiSize / 2);
     const roi = ctx.getImageData(cx - half, cy - half, roiSize, roiSize);
 
-    // Compute mean intensity of central ROI
     let sum = 0;
     const pixels = roi.data;
     for (let i = 0; i < pixels.length; i += 4) {
@@ -371,7 +441,6 @@ class MichelsonAssistant extends HTMLElement {
     }
     const intensity = sum / (roiSize * roiSize);
 
-    // Signal processing
     this._intensityHistory.push(intensity);
     if (this._intensityHistory.length > 200) this._intensityHistory.shift();
 
@@ -385,7 +454,6 @@ class MichelsonAssistant extends HTMLElement {
 
     const diff = smoothed - this._baseline;
 
-    // Fringe detection
     if (Math.abs(diff) > this._noiseGate && this._intensityHistory.length > 10) {
       const state = diff > 0 ? "above" : "below";
       if (this._lastState && state !== this._lastState) {
@@ -395,7 +463,12 @@ class MichelsonAssistant extends HTMLElement {
           this._halfCycle = false;
           if (this._segmentCount >= this._alertInterval) {
             this._doAlert();
-            this._segmentCount = 0;
+            this._fringeRunning = false;
+            this.shadow.getElementById("btn-fringe-action").textContent = "继续";
+            this.shadow.getElementById("btn-fringe-action").className = "btn-primary";
+            this.shadow.getElementById("fringe-pause").classList.add("show");
+            this._updateFringeDisplay();
+            return;
           }
         } else {
           this._halfCycle = true;
@@ -440,15 +513,7 @@ class MichelsonAssistant extends HTMLElement {
       ctx.stroke();
     }
 
-    // Alert flash
-    if (this._segmentCount === 0 && this._fringeCount > 0) {
-      const flash = Math.abs(Math.sin(Date.now() / 100));
-      ctx.fillStyle = `rgba(0,${Math.floor(flash * 255)},255,0.3)`;
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-    }
-
     this._updateFringeDisplay();
-    this._animFrameId = requestAnimationFrame(() => this._processFringeFrame());
   }
 
   _updateFringeDisplay() {
@@ -475,11 +540,10 @@ class MichelsonAssistant extends HTMLElement {
   // ── Cleanup ──────────────────────────────────────────────────
 
   disconnectedCallback() {
-    this._stopFringe();
+    this._stopCamera();
   }
 }
 
-// Register the custom element
 if (!customElements.get("michelson-assistant")) {
   customElements.define("michelson-assistant", MichelsonAssistant);
 }
