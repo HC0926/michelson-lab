@@ -22,8 +22,7 @@ class MichelsonAssistant extends HTMLElement {
     this._lastState = null;
     this._halfCycle = false;
     this._animFrameId = null;
-    this._fringeSource = null; // 'camera' | 'video'
-    // Tunable sensitivity parameters (optimized from real interferometer videos)
+    // Fringe detection params (optimized from real interferometer videos)
     this._noiseGate = 0.3;
     this._smoothWindow = 2;
     this._emaAlpha = 0.03;
@@ -78,16 +77,11 @@ class MichelsonAssistant extends HTMLElement {
       .fringe-view video { display: none; }
       .fringe-view canvas { width: 100%; height: 100%; object-fit: cover; }
       .fringe-count { position: absolute; top: 10px; left: 10px; color: #0f0; font-family: monospace; font-size: 16px; text-shadow: 0 0 6px rgba(0,255,0,0.5); background: rgba(0,0,0,0.6); padding: 6px 12px; border-radius: 6px; }
-      .fringe-controls { display: flex; gap: 8px; padding: 10px 0; flex-shrink: 0; flex-wrap: wrap; }
-      .fringe-controls button { flex: 1; min-width: 60px; padding: 12px 8px; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600; -webkit-tap-highlight-color: transparent; }
+      .fringe-controls { display: flex; gap: 8px; padding: 10px 0; flex-shrink: 0; }
+      .fringe-controls button { flex: 1; padding: 12px 8px; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600; -webkit-tap-highlight-color: transparent; }
       .btn-start { background: #27ae60; color: #fff; }
       .btn-stop { background: var(--mc-danger); color: #fff; }
       .btn-reset { background: #555; color: #fff; }
-      .btn-video { background: #2980b9; color: #fff; }
-      .sens-row { display: flex; align-items: center; gap: 6px; padding: 4px 0; font-size: 12px; color: #aaa; flex-shrink: 0; }
-      .sens-row label { min-width: 50px; text-align: right; }
-      .sens-row input[type=range] { flex: 1; accent-color: var(--mc-primary); }
-      .sens-row span { min-width: 30px; color: var(--mc-primary); }
       .loading { text-align: center; padding: 20px; color: #888; }
       .loading::after { content: "..."; animation: dots 1.4s infinite; }
       @keyframes dots { 0%,20% { content: "."; } 40% { content: ".."; } 60%,100% { content: "..."; } }
@@ -138,20 +132,15 @@ class MichelsonAssistant extends HTMLElement {
         </div>
         <div class="content" id="tab-fringe">
           <div class="fringe-view" id="fringe-view">
-            <video id="fringe-video" autoplay playsinline loop muted></video>
+            <video id="fringe-video" autoplay playsinline></video>
             <canvas id="fringe-canvas"></canvas>
             <div class="fringe-count" id="fringe-count">计数: 0 | 分段: 0/50</div>
           </div>
           <div class="fringe-controls">
             <button class="btn-start" id="btn-fringe-start">打开摄像头</button>
-            <button class="btn-video" id="btn-fringe-video">加载视频</button>
             <button class="btn-stop" id="btn-fringe-stop" disabled>停止</button>
             <button class="btn-reset" id="btn-fringe-reset">重置计数</button>
           </div>
-          <input type="file" id="video-input" accept="video/*" style="display:none" />
-          <div class="sens-row"><label>灵敏度</label><input type="range" id="sens-noise" min="0.1" max="3" step="0.1" value="0.3" /><span id="val-noise">0.3</span></div>
-          <div class="sens-row"><label>平滑度</label><input type="range" id="sens-smooth" min="1" max="10" step="1" value="2" /><span id="val-smooth">2</span></div>
-          <div class="sens-row"><label>响应速度</label><input type="range" id="sens-ema" min="0.01" max="0.15" step="0.01" value="0.03" /><span id="val-ema">0.03</span></div>
         </div>
       </div>`;
   }
@@ -172,14 +161,8 @@ class MichelsonAssistant extends HTMLElement {
     s.getElementById("photo-drop").addEventListener("drop", e => { e.preventDefault(); e.currentTarget.style.borderColor = "var(--mc-border)"; const f = e.dataTransfer.files[0]; if (f) this._previewPhoto(f); });
     s.getElementById("btn-analyze").addEventListener("click", () => this._analyzePhoto());
     s.getElementById("btn-fringe-start").addEventListener("click", () => this._startFringe());
-    s.getElementById("btn-fringe-video").addEventListener("click", () => s.getElementById("video-input").click());
-    s.getElementById("video-input").addEventListener("change", e => { if (e.target.files[0]) this._loadVideoFile(e.target.files[0]); });
     s.getElementById("btn-fringe-stop").addEventListener("click", () => this._stopFringe());
     s.getElementById("btn-fringe-reset").addEventListener("click", () => { this._fringeCount = 0; this._segmentCount = 0; this._updateFringeDisplay(); });
-    // Sensitivity sliders
-    s.getElementById("sens-noise").addEventListener("input", e => { this._noiseGate = parseFloat(e.target.value); s.getElementById("val-noise").textContent = e.target.value; });
-    s.getElementById("sens-smooth").addEventListener("input", e => { this._smoothWindow = parseInt(e.target.value); s.getElementById("val-smooth").textContent = e.target.value; });
-    s.getElementById("sens-ema").addEventListener("input", e => { this._emaAlpha = parseFloat(e.target.value); s.getElementById("val-ema").textContent = e.target.value; });
   }
 
   // ── Panel ───────────────────────────────────────────────────
@@ -319,36 +302,9 @@ class MichelsonAssistant extends HTMLElement {
     }
   }
 
-  _loadVideoFile(file) {
-    const video = this.shadow.getElementById("fringe-video");
-    this._stopFringe();
-    // Release camera if active
-    if (video.srcObject) {
-      video.srcObject.getTracks().forEach(t => t.stop());
-      video.srcObject = null;
-    }
-    video.src = URL.createObjectURL(file);
-    video.loop = true;
-    video.muted = true;
-    video.play().then(() => {
-      this._fringeSource = "video";
-      this._fringeRunning = true;
-      this._baseline = null;
-      this._lastState = null;
-      this._halfCycle = false;
-      this._intensityHistory = [];
-      this.shadow.getElementById("btn-fringe-start").disabled = true;
-      this.shadow.getElementById("btn-fringe-video").disabled = true;
-      this.shadow.getElementById("btn-fringe-stop").disabled = false;
-      this._processFringeFrame();
-    }).catch(e => alert("视频加载失败: " + e.message));
-  }
-
   async _startFringe() {
     const video = this.shadow.getElementById("fringe-video");
-    // If already running with video, just switch
     this._stopFringe();
-    if (video.src) { URL.revokeObjectURL(video.src); video.src = ""; }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: "environment", width: { ideal: 640 }, height: { ideal: 480 } },
@@ -357,7 +313,6 @@ class MichelsonAssistant extends HTMLElement {
       video.srcObject = stream;
       await video.play();
 
-      this._fringeSource = "camera";
       this._fringeRunning = true;
       this._baseline = null;
       this._lastState = null;
@@ -365,7 +320,6 @@ class MichelsonAssistant extends HTMLElement {
       this._intensityHistory = [];
 
       this.shadow.getElementById("btn-fringe-start").disabled = true;
-      this.shadow.getElementById("btn-fringe-video").disabled = true;
       this.shadow.getElementById("btn-fringe-stop").disabled = false;
       this._processFringeFrame();
     } catch (e) {
@@ -377,13 +331,11 @@ class MichelsonAssistant extends HTMLElement {
     this._fringeRunning = false;
     if (this._animFrameId) cancelAnimationFrame(this._animFrameId);
     const video = this.shadow.getElementById("fringe-video");
-    if (this._fringeSource === "camera" && video.srcObject) {
+    if (video.srcObject) {
       video.srcObject.getTracks().forEach(t => t.stop());
       video.srcObject = null;
     }
-    video.pause();
     this.shadow.getElementById("btn-fringe-start").disabled = false;
-    this.shadow.getElementById("btn-fringe-video").disabled = false;
     this.shadow.getElementById("btn-fringe-stop").disabled = true;
   }
 
@@ -424,7 +376,7 @@ class MichelsonAssistant extends HTMLElement {
     const localRange = mx - mn;
     const intensity = localRange > 0.5 ? 255 * ((rawMean - mn) / localRange) : rawMean;
 
-    // Signal processing — use tunable parameters
+    // Signal processing
     this._intensityHistory.push(intensity);
     if (this._intensityHistory.length > 200) this._intensityHistory.shift();
 
@@ -438,7 +390,7 @@ class MichelsonAssistant extends HTMLElement {
 
     const diff = smoothed - this._baseline;
 
-    // Fringe detection — use tunable noise gate
+    // Fringe detection
     if (Math.abs(diff) > this._noiseGate && this._intensityHistory.length > 10) {
       const state = diff > 0 ? "above" : "below";
       if (this._lastState && state !== this._lastState) {
