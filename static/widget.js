@@ -9,7 +9,7 @@
 class MichelsonAssistant extends HTMLElement {
   constructor() {
     super();
-    this.apiBase = this.getAttribute("api-base") || "http://localhost:8000";
+    this.apiBase = this.getAttribute("api-base") ?? "";
     this._open = false;
     this._tab = "chat";
     this._messages = [];
