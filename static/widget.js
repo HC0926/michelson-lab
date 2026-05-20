@@ -136,6 +136,7 @@ class MichelsonAssistant extends HTMLElement {
             <canvas id="fringe-canvas"></canvas>
             <div class="fringe-count" id="fringe-count">计数: 0 | 分段: 0/50</div>
           </div>
+          <div style="text-align:center;color:#f39c12;font-size:13px;padding:8px 0;flex-shrink:0;">&#9888; 请保持仪器平稳！</div>
           <div class="fringe-controls">
             <button class="btn-start" id="btn-fringe-start">打开摄像头</button>
             <button class="btn-stop" id="btn-fringe-stop" disabled>停止</button>
