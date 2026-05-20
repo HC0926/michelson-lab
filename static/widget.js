@@ -39,49 +39,69 @@ class MichelsonAssistant extends HTMLElement {
   _render() {
     const style = /*css*/ `
       :host { --mc-primary: #6c5ce7; --mc-bg: #1a1a2e; --mc-surface: #16213e; --mc-text: #e0e0e0; --mc-border: #2a2a4a; --mc-danger: #e74c3c; font-family: 'Segoe UI', system-ui, sans-serif; }
-      .bubble { position: fixed; bottom: 24px; right: 24px; width: 56px; height: 56px; border-radius: 50%; background: var(--mc-primary); color: #fff; border: none; cursor: pointer; font-size: 24px; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 16px rgba(108,92,231,0.4); z-index: 99998; transition: transform 0.2s; }
+      .bubble { position: fixed; bottom: 24px; right: 24px; width: 56px; height: 56px; border-radius: 50%; background: var(--mc-primary); color: #fff; border: none; cursor: pointer; font-size: 24px; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 16px rgba(108,92,231,0.4); z-index: 99998; transition: transform 0.2s; -webkit-tap-highlight-color: transparent; }
       .bubble:hover { transform: scale(1.1); }
       .bubble.open { display: none; }
-      .panel { display: none; position: fixed; bottom: 24px; right: 24px; width: 420px; height: 600px; max-height: calc(100vh - 60px); background: var(--mc-bg); border-radius: 16px; box-shadow: 0 8px 32px rgba(0,0,0,0.3); z-index: 99999; flex-direction: column; overflow: hidden; border: 1px solid var(--mc-border); }
+      .panel { display: none; position: fixed; bottom: 0; right: 0; width: 420px; height: 600px; max-height: 100vh; max-width: 100vw; background: var(--mc-bg); border-radius: 16px; box-shadow: 0 8px 32px rgba(0,0,0,0.3); z-index: 99999; flex-direction: column; overflow: hidden; border: 1px solid var(--mc-border); }
       .panel.open { display: flex; }
-      .header { background: var(--mc-primary); color: #fff; padding: 12px 16px; display: flex; align-items: center; justify-content: space-between; }
+      .header { background: var(--mc-primary); color: #fff; padding: 12px 16px; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
       .header h3 { margin: 0; font-size: 15px; font-weight: 600; }
-      .header button { background: none; border: none; color: #fff; font-size: 20px; cursor: pointer; padding: 0 4px; line-height: 1; }
-      .tabs { display: flex; background: var(--mc-surface); border-bottom: 1px solid var(--mc-border); }
-      .tab { flex: 1; padding: 10px; background: none; border: none; color: #888; cursor: pointer; font-size: 13px; border-bottom: 2px solid transparent; transition: all 0.2s; }
+      .header button { background: none; border: none; color: #fff; font-size: 24px; cursor: pointer; padding: 0 8px; line-height: 1; -webkit-tap-highlight-color: transparent; }
+      .tabs { display: flex; background: var(--mc-surface); border-bottom: 1px solid var(--mc-border); flex-shrink: 0; }
+      .tab { flex: 1; padding: 12px 8px; background: none; border: none; color: #888; cursor: pointer; font-size: 14px; border-bottom: 2px solid transparent; transition: all 0.2s; -webkit-tap-highlight-color: transparent; }
       .tab.active { color: var(--mc-primary); border-bottom-color: var(--mc-primary); }
-      .content { flex: 1; overflow-y: auto; padding: 12px; display: none; }
+      .content { flex: 1; overflow-y: auto; padding: 12px; display: none; -webkit-overflow-scrolling: touch; }
       .content.active { display: flex; flex-direction: column; }
-      .messages { flex: 1; overflow-y: auto; margin-bottom: 8px; }
-      .msg { margin-bottom: 10px; padding: 8px 12px; border-radius: 10px; max-width: 85%; font-size: 13px; line-height: 1.5; word-break: break-word; }
+      .messages { flex: 1; overflow-y: auto; margin-bottom: 8px; -webkit-overflow-scrolling: touch; }
+      .msg { margin-bottom: 10px; padding: 8px 12px; border-radius: 10px; max-width: 85%; font-size: 14px; line-height: 1.5; word-break: break-word; }
       .msg.user { background: var(--mc-primary); color: #fff; align-self: flex-end; }
       .msg.assistant { background: var(--mc-surface); color: var(--mc-text); align-self: flex-start; }
       .msg.assistant p { margin: 4px 0; }
       .msg.assistant code { background: rgba(0,0,0,0.3); padding: 2px 5px; border-radius: 3px; font-size: 12px; }
       .msg.assistant table { font-size: 11px; border-collapse: collapse; width: 100%; margin: 6px 0; }
       .msg.assistant td, .msg.assistant th { border: 1px solid var(--mc-border); padding: 4px 6px; }
-      .input-row { display: flex; gap: 8px; }
-      .input-row input { flex: 1; padding: 10px 12px; border: 1px solid var(--mc-border); border-radius: 8px; background: var(--mc-surface); color: var(--mc-text); font-size: 13px; outline: none; }
+      .input-row { display: flex; gap: 8px; flex-shrink: 0; }
+      .input-row input { flex: 1; padding: 12px; border: 1px solid var(--mc-border); border-radius: 8px; background: var(--mc-surface); color: var(--mc-text); font-size: 16px; outline: none; }
       .input-row input:focus { border-color: var(--mc-primary); }
-      .input-row button { background: var(--mc-primary); color: #fff; border: none; padding: 10px 16px; border-radius: 8px; cursor: pointer; font-size: 13px; }
+      .input-row button { background: var(--mc-primary); color: #fff; border: none; padding: 12px 16px; border-radius: 8px; cursor: pointer; font-size: 14px; white-space: nowrap; -webkit-tap-highlight-color: transparent; }
       .input-row button:disabled { opacity: 0.5; cursor: not-allowed; }
-      .photo-drop { border: 2px dashed var(--mc-border); border-radius: 12px; padding: 30px; text-align: center; color: #888; cursor: pointer; transition: border-color 0.2s; }
+      .photo-drop { border: 2px dashed var(--mc-border); border-radius: 12px; padding: 30px; text-align: center; color: #888; cursor: pointer; transition: border-color 0.2s; -webkit-tap-highlight-color: transparent; }
       .photo-drop:hover { border-color: var(--mc-primary); }
       .photo-drop img { max-width: 100%; max-height: 200px; border-radius: 8px; margin-top: 10px; }
-      .diagnosis { margin-top: 12px; padding: 12px; background: var(--mc-surface); border-radius: 8px; font-size: 13px; line-height: 1.5; color: var(--mc-text); }
-      .fringe-view { position: relative; flex: 1; background: #000; border-radius: 8px; overflow: hidden; display: flex; align-items: center; justify-content: center; }
+      .diagnosis { margin-top: 12px; padding: 12px; background: var(--mc-surface); border-radius: 8px; font-size: 14px; line-height: 1.5; color: var(--mc-text); }
+      .fringe-view { position: relative; flex: 1; background: #000; border-radius: 8px; overflow: hidden; display: flex; align-items: center; justify-content: center; min-height: 200px; }
       .fringe-view video { display: none; }
       .fringe-view canvas { width: 100%; height: 100%; object-fit: cover; }
-      .fringe-count { position: absolute; top: 10px; left: 10px; color: #0f0; font-family: monospace; font-size: 18px; text-shadow: 0 0 6px rgba(0,255,0,0.5); background: rgba(0,0,0,0.6); padding: 6px 12px; border-radius: 6px; }
-      .fringe-controls { display: flex; gap: 8px; padding: 10px 0; }
-      .fringe-controls button { flex: 1; padding: 10px; border: none; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 600; }
+      .fringe-count { position: absolute; top: 10px; left: 10px; color: #0f0; font-family: monospace; font-size: 16px; text-shadow: 0 0 6px rgba(0,255,0,0.5); background: rgba(0,0,0,0.6); padding: 6px 12px; border-radius: 6px; }
+      .fringe-controls { display: flex; gap: 8px; padding: 10px 0; flex-shrink: 0; }
+      .fringe-controls button { flex: 1; padding: 12px 8px; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600; -webkit-tap-highlight-color: transparent; }
       .btn-start { background: #27ae60; color: #fff; }
       .btn-stop { background: var(--mc-danger); color: #fff; }
       .btn-reset { background: #555; color: #fff; }
       .loading { text-align: center; padding: 20px; color: #888; }
       .loading::after { content: "..."; animation: dots 1.4s infinite; }
       @keyframes dots { 0%,20% { content: "."; } 40% { content: ".."; } 60%,100% { content: "..."; } }
-      .empty-state { text-align: center; color: #666; padding: 30px 20px; font-size: 13px; }
+      .empty-state { text-align: center; color: #666; padding: 30px 20px; font-size: 14px; }
+      /* Mobile: full-screen panel + larger touch targets */
+      @media (max-width: 480px) {
+        .bubble { bottom: 16px; right: 16px; width: 52px; height: 52px; font-size: 22px; }
+        .panel { top: 0; left: 0; bottom: 0; right: 0; width: 100%; height: 100%; max-height: 100vh; max-width: 100vw; border-radius: 0; border: none; }
+        .header { padding: 14px 16px; }
+        .header h3 { font-size: 16px; }
+        .header button { font-size: 28px; padding: 0 12px; }
+        .tab { padding: 14px 8px; font-size: 15px; }
+        .content { padding: 10px; }
+        .input-row input { padding: 14px 12px; font-size: 16px; }
+        .input-row button { padding: 14px 16px; font-size: 15px; }
+        .photo-drop { padding: 40px 20px; }
+        .msg { font-size: 15px; }
+        .fringe-count { font-size: 14px; top: 6px; left: 6px; padding: 4px 10px; }
+        .fringe-controls button { padding: 14px 8px; font-size: 14px; }
+      }
+      /* Tablet: mid-size panel */
+      @media (min-width: 481px) and (max-width: 768px) {
+        .panel { bottom: 16px; right: 16px; left: 16px; top: auto; width: auto; height: 65vh; border-radius: 16px 16px 0 0; }
+      }
     `;
     this.shadow.innerHTML = /*html*/ `
       <style>${style}</style>
