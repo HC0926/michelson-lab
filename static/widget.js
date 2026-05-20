@@ -23,10 +23,10 @@ class MichelsonAssistant extends HTMLElement {
     this._halfCycle = false;
     this._animFrameId = null;
     this._fringeSource = null; // 'camera' | 'video'
-    // Tunable sensitivity parameters
-    this._noiseGate = 1.5;
-    this._smoothWindow = 3;
-    this._emaAlpha = 0.05;
+    // Tunable sensitivity parameters (optimized from real interferometer videos)
+    this._noiseGate = 0.3;
+    this._smoothWindow = 2;
+    this._emaAlpha = 0.03;
     this._attachShadow();
   }
 
@@ -149,9 +149,9 @@ class MichelsonAssistant extends HTMLElement {
             <button class="btn-reset" id="btn-fringe-reset">重置计数</button>
           </div>
           <input type="file" id="video-input" accept="video/*" style="display:none" />
-          <div class="sens-row"><label>灵敏度</label><input type="range" id="sens-noise" min="0.3" max="5" step="0.1" value="1.5" /><span id="val-noise">1.5</span></div>
-          <div class="sens-row"><label>平滑度</label><input type="range" id="sens-smooth" min="1" max="15" step="1" value="3" /><span id="val-smooth">3</span></div>
-          <div class="sens-row"><label>响应速度</label><input type="range" id="sens-ema" min="0.01" max="0.2" step="0.01" value="0.05" /><span id="val-ema">0.05</span></div>
+          <div class="sens-row"><label>灵敏度</label><input type="range" id="sens-noise" min="0.1" max="3" step="0.1" value="0.3" /><span id="val-noise">0.3</span></div>
+          <div class="sens-row"><label>平滑度</label><input type="range" id="sens-smooth" min="1" max="10" step="1" value="2" /><span id="val-smooth">2</span></div>
+          <div class="sens-row"><label>响应速度</label><input type="range" id="sens-ema" min="0.01" max="0.15" step="0.01" value="0.03" /><span id="val-ema">0.03</span></div>
         </div>
       </div>`;
   }
@@ -410,13 +410,19 @@ class MichelsonAssistant extends HTMLElement {
     const half = Math.floor(roiSize / 2);
     const roi = ctx.getImageData(cx - half, cy - half, roiSize, roiSize);
 
-    // Compute mean intensity
-    let sum = 0;
+    // Compute mean intensity with local contrast amplification
+    let sum = 0, mn = 255, mx = 0;
     const pixels = roi.data;
     for (let i = 0; i < pixels.length; i += 4) {
-      sum += (pixels[i] + pixels[i + 1] + pixels[i + 2]) / 3;
+      const g = (pixels[i] + pixels[i + 1] + pixels[i + 2]) / 3;
+      if (g < mn) mn = g;
+      if (g > mx) mx = g;
+      sum += g;
     }
-    const intensity = sum / (roiSize * roiSize);
+    const rawMean = sum / (roiSize * roiSize);
+    // Amplify weak signals: stretch local contrast to full range
+    const localRange = mx - mn;
+    const intensity = localRange > 0.5 ? 255 * ((rawMean - mn) / localRange) : rawMean;
 
     // Signal processing — use tunable parameters
     this._intensityHistory.push(intensity);
