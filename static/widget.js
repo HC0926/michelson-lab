@@ -23,7 +23,7 @@ class MichelsonAssistant extends HTMLElement {
     this._halfCycle = false;
     this._animFrameId = null;
     // Fringe detection params (optimized from real interferometer videos)
-    this._noiseGate = 4;
+    this._noiseGate = 0.8;
     this._smoothWindow = 2;
     this._emaAlpha = 0.03;
     this._attachShadow();
@@ -362,19 +362,13 @@ class MichelsonAssistant extends HTMLElement {
     const half = Math.floor(roiSize / 2);
     const roi = ctx.getImageData(cx - half, cy - half, roiSize, roiSize);
 
-    // Compute mean intensity with local contrast amplification
-    let sum = 0, mn = 255, mx = 0;
+    // Compute mean intensity of central ROI
+    let sum = 0;
     const pixels = roi.data;
     for (let i = 0; i < pixels.length; i += 4) {
-      const g = (pixels[i] + pixels[i + 1] + pixels[i + 2]) / 3;
-      if (g < mn) mn = g;
-      if (g > mx) mx = g;
-      sum += g;
+      sum += (pixels[i] + pixels[i + 1] + pixels[i + 2]) / 3;
     }
-    const rawMean = sum / (roiSize * roiSize);
-    // Amplify weak signals: stretch local contrast to full range
-    const localRange = mx - mn;
-    const intensity = localRange > 0.5 ? 255 * ((rawMean - mn) / localRange) : rawMean;
+    const intensity = sum / (roiSize * roiSize);
 
     // Signal processing
     this._intensityHistory.push(intensity);
