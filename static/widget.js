@@ -23,9 +23,9 @@ class MichelsonAssistant extends HTMLElement {
     this._halfCycle = false;
     this._animFrameId = null;
     // Fringe detection params (optimized from real interferometer videos)
-    this._noiseGate = 0.3;
-    this._smoothWindow = 2;
-    this._emaAlpha = 0.03;
+    this._noiseGate = 8;
+    this._smoothWindow = 3;
+    this._emaAlpha = 0.04;
     this._attachShadow();
   }
 
